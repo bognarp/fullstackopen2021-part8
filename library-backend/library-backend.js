@@ -55,7 +55,7 @@ const typeDefs = gql`
     authorCount: Int!
     allBooks(author: String, genre: String): [Book!]!
     allAuthors: [Author!]!
-    me: User
+    me(token: String): User
   }
 
   type Mutation {
@@ -80,11 +80,6 @@ const resolvers = {
       // if (args.author) {
       //   response = response.filter((b) => b.author === args.author);
       // }
-      // if (args.genre) {
-      //   response = response.filter((b) => {
-      //     return b.genres.includes(args.genre);
-      //   });
-      // }
       if (args.genre) {
         return await Book.find({ genres: { $in: [args.genre] } });
       } else {
@@ -92,7 +87,11 @@ const resolvers = {
       }
     },
     allAuthors: async () => Author.find({}),
-    me: (root, args, context) => {
+    me: async (root, args, context) => {
+      if (args.token) {
+        const decodedToken = jwt.verify(args.token, JWT_SECRET);
+        return await User.findById(decodedToken.id);
+      }
       return context.currentUser;
     },
   },

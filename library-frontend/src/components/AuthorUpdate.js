@@ -2,18 +2,21 @@ import { useMutation } from '@apollo/client';
 import React, { useState } from 'react';
 import { UPDATE_AUTHOR_BIRTH, ALL_AUTHORS } from '../queries';
 
-const AuthorUpdate = ({ authors }) => {
+const AuthorUpdate = ({ authors, setError }) => {
   const [name, setName] = useState(authors[0].name);
   const [birthyear, setBirthYear] = useState('');
 
   const [updateAuthorBirth] = useMutation(UPDATE_AUTHOR_BIRTH, {
     refetchQueries: [{ query: ALL_AUTHORS }],
+    onError: (error) => {
+      setError(error.graphQLErrors[0].message);
+    },
   });
 
   const updateAuthor = async (event) => {
     event.preventDefault();
 
-    updateAuthorBirth({
+    await updateAuthorBirth({
       variables: { name, setBornTo: parseInt(birthyear) },
     });
 
