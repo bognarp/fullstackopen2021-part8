@@ -10,6 +10,8 @@ const config = require('./utils/config');
 const Book = require('./models/book');
 const Author = require('./models/author');
 const User = require('./models/user');
+const { PubSub } = require('graphql-subscriptions');
+const pubsub = new PubSub();
 
 console.log('connecting to ... ', config.MONGODB_URI);
 
@@ -69,6 +71,10 @@ const typeDefs = gql`
     createUser(username: String!, favoriteGenre: String!): User
     login(username: String!, password: String!): Token
   }
+
+  type Subscription {
+    bookAdded: Book!
+  }
 `;
 
 const resolvers = {
@@ -76,17 +82,13 @@ const resolvers = {
     bookCount: () => Book.collection.countDocuments(),
     authorCount: () => Author.collection.countDocuments(),
     allBooks: async (root, args) => {
-      // let response = books;
-      // if (args.author) {
-      //   response = response.filter((b) => b.author === args.author);
-      // }
       if (args.genre) {
         return await Book.find({ genres: { $in: [args.genre] } });
       } else {
         return Book.find({});
       }
     },
-    allAuthors: async () => Author.find({}),
+    allAuthors: async () => Author.find({}).populate('books'),
     me: async (root, args, context) => {
       if (args.token) {
         const decodedToken = jwt.verify(args.token, JWT_SECRET);
@@ -104,7 +106,7 @@ const resolvers = {
 
   Author: {
     bookCount: async (root) => {
-      return await Book.count({ author: root });
+      return root.books.length;
     },
   },
 
@@ -119,24 +121,34 @@ const resolvers = {
       let author = await Author.findOne({ name: args.author });
 
       if (!author) {
-        author = new Author({ name: args.author });
+        const newAuthor = new Author({ name: args.author });
 
         try {
-          await author.save();
+          author = await newAuthor.save();
         } catch (error) {
           throw new UserInputError(error.message, {
             invalidArgs: args,
           });
         }
       }
-      const book = new Book({ ...args, author });
+
+      let book = new Book({ ...args, author: author._id });
+      console.log('Book before save(): ->', book);
+
       try {
-        await book.save();
+        book = await book.save();
+        await Author.findByIdAndUpdate(
+          author._id,
+          { books: author.books.concat(book._id) },
+          { new: true }
+        );
       } catch (error) {
         throw new UserInputError(error.message, {
           invalidArgs: args,
         });
       }
+
+      pubsub.publish('BOOK_ADDED', { bookAdded: book });
 
       return book;
     },
@@ -189,6 +201,14 @@ const resolvers = {
       };
 
       return { value: jwt.sign(userForToken, JWT_SECRET) };
+    },
+  },
+
+  Subscription: {
+    bookAdded: {
+      subscribe: () => {
+        return pubsub.asyncIterator(['BOOK_ADDED']);
+      },
     },
   },
 };

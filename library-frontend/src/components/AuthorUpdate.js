@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { UPDATE_AUTHOR_BIRTH, ALL_AUTHORS } from '../queries';
 
 const AuthorUpdate = ({ authors, setError }) => {
-  const [name, setName] = useState(authors[0].name);
+  const [name, setName] = useState(authors.length === 0 ? '' : authors[0].name);
   const [birthyear, setBirthYear] = useState('');
 
   const [updateAuthorBirth] = useMutation(UPDATE_AUTHOR_BIRTH, {

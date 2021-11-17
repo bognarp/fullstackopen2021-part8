@@ -3,9 +3,9 @@ import Authors from './components/Authors';
 import Books from './components/Books';
 import LoginForm from './components/LoginForm';
 import NewBook from './components/NewBook';
-import { useApolloClient, useLazyQuery } from '@apollo/client';
+import { useApolloClient, useLazyQuery, useSubscription } from '@apollo/client';
 import Recommendations from './components/Recommendations';
-import { USER } from './queries';
+import { ALL_BOOKS, BOOK_ADDED, USER } from './queries';
 
 const Notify = ({ errorMessage }) => {
   if (!errorMessage) {
@@ -36,6 +36,27 @@ const App = () => {
       setUser(userResult.data.me);
     }
   }, [token, userResult.loading]); // eslint-disable-line
+
+  const updateCacheWith = (addedBook) => {
+    const includedIn = (set, object) =>
+      set.map((p) => p.id).includes(object.id);
+
+    const dataInStore = client.readQuery({ query: ALL_BOOKS });
+    if (!includedIn(dataInStore.allBooks, addedBook)) {
+      client.writeQuery({
+        query: ALL_BOOKS,
+        data: { allBooks: dataInStore.allBooks.concat(addedBook) },
+      });
+    }
+  };
+
+  useSubscription(BOOK_ADDED, {
+    onSubscriptionData: ({ subscriptionData }) => {
+      const addedBook = subscriptionData.data.bookAdded;
+      notify(`${addedBook.title} added`);
+      updateCacheWith(addedBook);
+    },
+  });
 
   const notify = (message) => {
     setErrorMessage(message);
